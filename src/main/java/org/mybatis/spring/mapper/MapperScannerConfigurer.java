@@ -93,6 +93,7 @@ import org.springframework.util.StringUtils;
  */
 public class MapperScannerConfigurer implements BeanDefinitionRegistryPostProcessor, InitializingBean, ApplicationContextAware, BeanNameAware {
 
+  // 映射器接口文件设置基本的包路径
   private String basePackage;
 
   private boolean addToConfig = true;
@@ -101,12 +102,16 @@ public class MapperScannerConfigurer implements BeanDefinitionRegistryPostProces
 
   private SqlSessionTemplate sqlSessionTemplate;
 
+  // 多数据源时，指定sqlSessionFactoryBeanName
   private String sqlSessionFactoryBeanName;
 
+  // 多数据源时，指定sqlSessionTemplateBeanName
   private String sqlSessionTemplateBeanName;
 
+  // 指定了要寻找的注解名称
   private Class<? extends Annotation> annotationClass;
 
+  // 指定了要寻找的父接口
   private Class<?> markerInterface;
 
   private ApplicationContext applicationContext;

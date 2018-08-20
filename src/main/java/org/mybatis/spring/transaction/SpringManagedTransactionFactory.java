@@ -26,7 +26,7 @@ import org.apache.ibatis.transaction.TransactionFactory;
 
 /**
  * Creates a {@code SpringManagedTransaction}.
- *
+ * Spring事务管理工厂
  * @author Hunter Presnall
  */
 public class SpringManagedTransactionFactory implements TransactionFactory {

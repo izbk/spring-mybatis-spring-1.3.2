@@ -132,6 +132,8 @@ public class SqlSessionTemplate implements SqlSession, DisposableBean {
     this.sqlSessionFactory = sqlSessionFactory;
     this.executorType = executorType;
     this.exceptionTranslator = exceptionTranslator;
+    // 创建sqlSessionProxy代理类的实例，该代理类实现SqlSession接口，定义了方法拦截器，如果调用代理类实例中
+    // 实现SqlSession接口定义的方法，该调用则被导向SqlSessionInterceptor的invoke方法
     this.sqlSessionProxy = (SqlSession) newProxyInstance(
         SqlSessionFactory.class.getClassLoader(),
         new Class[] { SqlSession.class },
@@ -425,12 +427,16 @@ public class SqlSessionTemplate implements SqlSession, DisposableBean {
   private class SqlSessionInterceptor implements InvocationHandler {
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+      //获取SqlSession(这个SqlSession才是真正使用的，它不是线程安全的)
+      //这个方法可以根据Spring的事物上下文来获取事物范围内的sqlSession
       SqlSession sqlSession = getSqlSession(
           SqlSessionTemplate.this.sqlSessionFactory,
           SqlSessionTemplate.this.executorType,
           SqlSessionTemplate.this.exceptionTranslator);
       try {
+        // 调用sqlSession的方法
         Object result = method.invoke(sqlSession, args);
+        // 判断当前的sqlSession是否被Spring托管，如果未被Spring托管则自动commit
         if (!isSqlSessionTransactional(sqlSession, SqlSessionTemplate.this.sqlSessionFactory)) {
           // force commit even on non-dirty sessions because some databases require
           // a commit/rollback before calling close()
@@ -438,6 +444,7 @@ public class SqlSessionTemplate implements SqlSession, DisposableBean {
         }
         return result;
       } catch (Throwable t) {
+        // 如果出现异常则根据情况转换后抛出
         Throwable unwrapped = unwrapThrowable(t);
         if (SqlSessionTemplate.this.exceptionTranslator != null && unwrapped instanceof PersistenceException) {
           // release the connection to avoid a deadlock if the translator is no loaded. See issue #22
@@ -451,6 +458,8 @@ public class SqlSessionTemplate implements SqlSession, DisposableBean {
         throw unwrapped;
       } finally {
         if (sqlSession != null) {
+          //关闭sqlSession，它会根据当前的sqlSession是否在Spring的事物上下文当中来执行具体的关闭动作
+          //如果sqlSession被Spring管理 则调用holder.released(); 使计数器-1;否则才真正的关闭sqlSession
           closeSqlSession(sqlSession, SqlSessionTemplate.this.sqlSessionFactory);
         }
       }

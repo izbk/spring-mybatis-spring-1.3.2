@@ -77,12 +77,15 @@ public class SqlSessionFactoryBean implements FactoryBean<SqlSessionFactory>, In
 
   private static final Log LOGGER = LogFactory.getLog(SqlSessionFactoryBean.class);
 
+  // mybatis-config.xml路径
   private Resource configLocation;
 
   private Configuration configuration;
 
+  // *Mapper.xml路径
   private Resource[] mapperLocations;
 
+  // 数据源配置
   private DataSource dataSource;
 
   private TransactionFactory transactionFactory;
@@ -372,6 +375,7 @@ public class SqlSessionFactoryBean implements FactoryBean<SqlSessionFactory>, In
    */
   @Override
   public void afterPropertiesSet() throws Exception {
+    // 数据源不能为空
     notNull(dataSource, "Property 'dataSource' is required");
     notNull(sqlSessionFactoryBuilder, "Property 'sqlSessionFactoryBuilder' is required");
     state((configuration == null && configLocation == null) || !(configuration != null && configLocation != null),
@@ -386,7 +390,7 @@ public class SqlSessionFactoryBean implements FactoryBean<SqlSessionFactory>, In
    * The default implementation uses the standard MyBatis {@code XMLConfigBuilder} API to build a
    * {@code SqlSessionFactory} instance based on an Reader.
    * Since 1.3.0, it can be specified a {@link Configuration} instance directly(without config file).
-   *
+   *  构建SqlSessionFactory
    * @return SqlSessionFactory
    * @throws IOException if loading the config file failed
    */

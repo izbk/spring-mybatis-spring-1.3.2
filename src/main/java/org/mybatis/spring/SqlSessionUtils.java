@@ -85,10 +85,12 @@ public final class SqlSessionUtils {
 
     notNull(sessionFactory, NO_SQL_SESSION_FACTORY_SPECIFIED);
     notNull(executorType, NO_EXECUTOR_TYPE_SPECIFIED);
-
+    // 根据sqlSessionFactory从当前线程对应的资源map中获取SqlSessionHolder，当sqlSessionFactory创建了sqlSession，
+    // 就会在事务管理器中添加一对映射：key为sqlSessionFactory，value为SqlSessionHolder，该类保存sqlSession及执行方式
     SqlSessionHolder holder = (SqlSessionHolder) TransactionSynchronizationManager.getResource(sessionFactory);
 
     SqlSession session = sessionHolder(executorType, holder);
+    //holder中存在则返回sqlSession
     if (session != null) {
       return session;
     }
@@ -96,9 +98,9 @@ public final class SqlSessionUtils {
     if (LOGGER.isDebugEnabled()) {
       LOGGER.debug("Creating a new SqlSession");
     }
-
+    //如果找不到，则根据执行类型构造一个新的sqlSession
     session = sessionFactory.openSession(executorType);
-
+   // 注册sqlSession到SessionHolder
     registerSessionHolder(sessionFactory, executorType, exceptionTranslator, session);
 
     return session;
@@ -120,18 +122,25 @@ public final class SqlSessionUtils {
   private static void registerSessionHolder(SqlSessionFactory sessionFactory, ExecutorType executorType,
       PersistenceExceptionTranslator exceptionTranslator, SqlSession session) {
     SqlSessionHolder holder;
+    // 判断同步是否激活，只要SpringTX被激活，就是true
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      //加载环境变量，判断注册的事务管理器是否是SpringManagedTransaction，也就是Spring管理事务
       Environment environment = sessionFactory.getConfiguration().getEnvironment();
 
       if (environment.getTransactionFactory() instanceof SpringManagedTransactionFactory) {
         if (LOGGER.isDebugEnabled()) {
           LOGGER.debug("Registering transaction synchronization for SqlSession [" + session + "]");
         }
-
+        // 如果是，则将sqlSession加载进事务管理的本地线程缓存中
         holder = new SqlSessionHolder(session, executorType, exceptionTranslator);
+        //  以sessionFactory为key，holder为value，加入到TransactionSynchronizationManager管理的本地缓存
+        // ThreadLocal<Map<Object, Object>> resources中
         TransactionSynchronizationManager.bindResource(sessionFactory, holder);
+        // 将holder, sessionFactory的同步加入本地线程缓存中ThreadLocal<Set<TransactionSynchronization>> synchronizations
         TransactionSynchronizationManager.registerSynchronization(new SqlSessionSynchronization(holder, sessionFactory));
+        // 设置当前holder和当前事务同步
         holder.setSynchronizedWithTransaction(true);
+        // 增加引用数
         holder.requested();
       } else {
         if (TransactionSynchronizationManager.getResource(environment.getDataSource()) == null) {
@@ -152,11 +161,14 @@ public final class SqlSessionUtils {
 
   private static SqlSession sessionHolder(ExecutorType executorType, SqlSessionHolder holder) {
     SqlSession session = null;
+    // 如果holder不为空，且和当前事务同步
     if (holder != null && holder.isSynchronizedWithTransaction()) {
+      // holder保存的执行类型和获取SqlSession的执行类型不一致，就会抛出异常，也就是说在同一个事务中，执行类型不能变化，
+      // 原因就是同一个事务中同一个sqlSessionFactory创建的sqlSession会被重用
       if (holder.getExecutorType() != executorType) {
         throw new TransientDataAccessResourceException("Cannot change the ExecutorType when there is an existing transaction");
       }
-
+      // 增加该holder,同一事务中同一个sqlSessionFactory创建的唯一sqlSession，其引用数增加，被使用的次数增加
       holder.requested();
 
       if (LOGGER.isDebugEnabled()) {
@@ -181,15 +193,18 @@ public final class SqlSessionUtils {
     notNull(sessionFactory, NO_SQL_SESSION_FACTORY_SPECIFIED);
 
     SqlSessionHolder holder = (SqlSessionHolder) TransactionSynchronizationManager.getResource(sessionFactory);
+    // 判断session是否被Spring事务管理，如果管理就会得到holder
     if ((holder != null) && (holder.getSqlSession() == session)) {
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug("Releasing transactional SqlSession [" + session + "]");
       }
+      // 这里释放的作用，不是关闭，只是减少一下引用数，因为后面可能会被复用
       holder.released();
     } else {
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug("Closing non transactional SqlSession [" + session + "]");
       }
+      // 如果不是被spring管理，那么就不会被Spring去关闭回收，就需要自己close
       session.close();
     }
   }
